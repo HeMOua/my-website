@@ -1,25 +1,133 @@
+:root {
+  color-scheme: dark;
+  --bg-0: #02050d;
+  --bg-1: #050d18;
+  --bg-2: #08172a;
+  --panel: rgba(7, 16, 30, 0.72);
+  --panel-strong: rgba(10, 20, 38, 0.9);
+  --panel-soft: rgba(13, 24, 44, 0.52);
+  --line: rgba(91, 228, 255, 0.16);
+  --line-strong: rgba(91, 228, 255, 0.32);
+  --text: #edf7ff;
+  --muted: rgba(201, 227, 255, 0.68);
+  --cyan: #53f3ff;
+  --blue: #66a9ff;
+  --violet: #9f6fff;
+  --pink: #ff68e0;
+  --shadow-cyan: 0 0 24px rgba(83, 243, 255, 0.2), 0 0 70px rgba(83, 243, 255, 0.1);
+  --shadow-violet: 0 0 24px rgba(159, 111, 255, 0.2), 0 0 70px rgba(159, 111, 255, 0.08);
+  --font-display: 'Bahnschrift', 'Segoe UI Variable', 'Segoe UI', 'Trebuchet MS', sans-serif;
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-html, body {
-  width: 100%;
+html,
+body,
+#app {
   min-height: 100%;
+}
+
+body {
+  width: 100%;
+  min-height: 100vh;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
-  background: black;
-  font-family: Arial, sans-serif;
-  color: white;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 18% 16%, rgba(102, 169, 255, 0.22), transparent 28%),
+    radial-gradient(circle at 82% 10%, rgba(159, 111, 255, 0.2), transparent 30%),
+    radial-gradient(circle at 50% 108%, rgba(83, 243, 255, 0.16), transparent 26%),
+    linear-gradient(180deg, #02050d 0%, #050d18 45%, #02040b 100%);
+  background-attachment: fixed;
+  font-family: var(--font-display);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  position: relative;
+}
+
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::before {
+  background:
+    linear-gradient(rgba(85, 231, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(85, 231, 255, 0.08) 1px, transparent 1px),
+    radial-gradient(circle at 50% 50%, transparent 45%, rgba(2, 7, 18, 0.62) 100%);
+  background-size: 100% 56px, 56px 100%, 100% 100%;
+  opacity: 0.22;
+  mask-image: linear-gradient(180deg, transparent, black 16%, black 84%, transparent);
+}
+
+body::after {
+  background:
+    radial-gradient(circle at 24% 24%, rgba(83, 243, 255, 0.14), transparent 16%),
+    radial-gradient(circle at 72% 30%, rgba(159, 111, 255, 0.12), transparent 18%),
+    radial-gradient(circle at 52% 78%, rgba(255, 104, 224, 0.1), transparent 18%);
+  filter: blur(22px);
+  opacity: 0.9;
+  animation: nebulaDrift 24s ease-in-out infinite alternate;
 }
 
 #app {
+  position: relative;
   min-height: 100dvh;
+  isolation: isolate;
 }
 
 a {
-  color: white;
+  color: inherit;
   text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  color: #fff;
+  background: rgba(83, 243, 255, 0.32);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(19, 31, 52, 0.7);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--blue), var(--violet));
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--cyan), var(--violet));
+}
+
+@keyframes nebulaDrift {
+  0% {
+    transform: translate3d(-1.5%, -1%, 0) scale(1);
+  }
+
+  100% {
+    transform: translate3d(1.5%, 1%, 0) scale(1.04);
+  }
 }

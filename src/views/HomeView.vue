@@ -26,6 +26,20 @@ let raycaster: THREE.Raycaster
 let mouse: THREE.Vector2
 let graphNodes: GraphNode[] = []
 let hoveredNode = ref<GraphNode | null>(null)
+const tooltipX = ref(0)
+const tooltipY = ref(0)
+
+const matrixColumns = Array.from({ length: 22 }, (_, i) => {
+  const chars = '01アイウエオカキクケコサシスセソ0123456789'
+  const stream = Array.from({ length: 24 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  return {
+    id: i,
+    left: `${(i / 22) * 100}%`,
+    duration: `${8 + Math.random() * 8}s`,
+    delay: `${Math.random() * 10}s`,
+    stream,
+  }
+})
 
 // 拖拽控制
 let isDragging = false
@@ -297,6 +311,9 @@ function onMouseDown(event: MouseEvent) {
 }
 
 function onMouseMove(event: MouseEvent) {
+  tooltipX.value = event.clientX
+  tooltipY.value = event.clientY
+
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
 
@@ -359,6 +376,8 @@ function onTouchMove(event: TouchEvent) {
   if (!isDragging || event.touches.length === 0) return
 
   const touch = event.touches[0]!
+  tooltipX.value = touch.clientX
+  tooltipY.value = touch.clientY
   const deltaX = touch.clientX - previousMousePosition.x
   const deltaY = touch.clientY - previousMousePosition.y
 
@@ -395,12 +414,66 @@ function onResize() {
   <div class="home">
     <canvas ref="canvasRef" class="canvas"></canvas>
 
-    <div class="header">
-      <h1>技数斋</h1>
-      <p>探索未知 · 创造未来</p>
+    <div class="bg-grid"></div>
+    <div class="scanline"></div>
+
+    <div class="matrix-rain" aria-hidden="true">
+      <span
+        v-for="column in matrixColumns"
+        :key="column.id"
+        class="matrix-col"
+        :style="{
+          left: column.left,
+          animationDuration: column.duration,
+          animationDelay: column.delay,
+        }"
+      >
+        {{ column.stream }}
+      </span>
     </div>
 
-    <div v-if="hoveredNode" class="tooltip">
+    <div class="header">
+      <h1>技数斋</h1>
+      <p>Cyber Interface v2.6 · 探索未知 · 创造未来</p>
+    </div>
+
+    <section class="hud-panel panel-left">
+      <h2>导航节点</h2>
+      <p>拖拽旋转星图，点击高亮主节点进入对应模块。</p>
+      <nav class="quick-links">
+        <router-link to="/blog">博客</router-link>
+        <router-link to="/projects">项目</router-link>
+        <router-link to="/games">游戏</router-link>
+        <router-link to="/about">关于</router-link>
+        <router-link to="/contact">联系</router-link>
+      </nav>
+    </section>
+
+    <section class="hud-panel panel-right">
+      <h2>系统状态</h2>
+      <div class="metric">
+        <span>DATA FLOW</span>
+        <i style="--pct: 88%"></i>
+      </div>
+      <div class="metric">
+        <span>NEURAL MESH</span>
+        <i style="--pct: 74%"></i>
+      </div>
+      <div class="metric">
+        <span>NODE SYNC</span>
+        <i style="--pct: 93%"></i>
+      </div>
+      <div class="metric">
+        <span>RENDER FPS</span>
+        <i style="--pct: 68%"></i>
+      </div>
+    </section>
+
+    <div
+      v-if="hoveredNode"
+      class="tooltip"
+      :style="{ left: `${tooltipX + 18}px`, top: `${tooltipY + 18}px` }"
+    >
       {{ hoveredNode.label }}
     </div>
 
@@ -414,8 +487,33 @@ function onResize() {
 .home {
   position: relative;
   width: 100vw;
-  height: 100vh;
+  min-height: 100dvh;
   overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(102, 169, 255, 0.14), transparent 22%),
+    radial-gradient(circle at 78% 14%, rgba(159, 111, 255, 0.16), transparent 20%),
+    radial-gradient(circle at 50% 84%, rgba(83, 243, 255, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(2, 6, 15, 0.18), rgba(2, 5, 13, 0.82));
+}
+
+.home::before,
+.home::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.home::before {
+  background:
+    radial-gradient(circle at 24% 22%, rgba(83, 243, 255, 0.08), transparent 16%),
+    radial-gradient(circle at 76% 26%, rgba(159, 111, 255, 0.08), transparent 18%),
+    radial-gradient(circle at 50% 70%, rgba(255, 104, 224, 0.04), transparent 22%);
+  opacity: 0.9;
+}
+
+.home::after {
+  background: radial-gradient(circle at center, transparent 18%, rgba(2, 6, 15, 0.18) 60%, rgba(2, 4, 9, 0.82) 100%);
 }
 
 .canvas {
@@ -426,60 +524,358 @@ function onResize() {
   height: 100%;
   cursor: grab;
   touch-action: none;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  z-index: 0;
+}
+
+.bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(85, 231, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(85, 231, 255, 0.08) 1px, transparent 1px);
+  background-size: 72px 72px;
+  opacity: 0.16;
+  pointer-events: none;
+  z-index: 1;
+  mask-image: radial-gradient(circle at center, black 34%, transparent 92%);
+}
+
+.scanline {
+  position: absolute;
+  inset: -180px 0 0;
+  background: linear-gradient(to bottom, transparent, rgba(55, 206, 255, 0.18), transparent);
+  animation: sweep 9s linear infinite;
+  z-index: 2;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0.75;
+}
+
+.matrix-rain {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.18;
+}
+
+.matrix-col {
+  position: absolute;
+  top: -70%;
+  color: rgba(117, 255, 242, 0.68);
+  font-size: 12px;
+  letter-spacing: 1px;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  text-shadow: 0 0 8px rgba(92, 255, 233, 0.7);
+  animation-name: rain;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
 }
 
 .header {
   position: absolute;
-  top: 32px;
-  left: 40px;
-  z-index: 1;
+  top: 24px;
+  left: 24px;
+  z-index: 4;
+  width: min(390px, calc(100vw - 48px));
+  padding: 20px 22px;
+  border: 1px solid rgba(137, 198, 255, 0.24);
+  border-radius: 24px;
+  background: linear-gradient(160deg, rgba(10, 18, 33, 0.84), rgba(6, 14, 26, 0.58));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 48px rgba(0, 0, 0, 0.34),
+    0 0 36px rgba(83, 243, 255, 0.16);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top right, rgba(159, 111, 255, 0.16), transparent 34%),
+    radial-gradient(circle at bottom left, rgba(83, 243, 255, 0.1), transparent 36%);
   pointer-events: none;
 }
 
 .header h1 {
-  font-size: 36px;
-  letter-spacing: 4px;
-  text-shadow: 0 0 20px cyan, 0 0 40px cyan;
-  animation: breatheText 4s ease-in-out infinite;
+  font-size: clamp(2.35rem, 5vw, 4.8rem);
+  line-height: 0.96;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 20px rgba(83, 243, 255, 0.3), 0 0 44px rgba(159, 111, 255, 0.18);
+  animation: breatheText 5s ease-in-out infinite;
+  position: relative;
+  z-index: 1;
 }
 
 .header p {
-  opacity: 0.6;
-  font-size: 14px;
-  margin-top: 8px;
+  margin-top: 10px;
+  color: rgba(201, 227, 255, 0.74);
+  font-size: 0.78rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  position: relative;
+  z-index: 1;
+}
+
+.hud-panel {
+  position: absolute;
+  z-index: 4;
+  width: min(340px, calc(100vw - 32px));
+  padding: 16px 18px;
+  border: 1px solid rgba(135, 228, 255, 0.22);
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(5, 16, 34, 0.64), rgba(18, 17, 34, 0.42));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 16px 44px rgba(0, 0, 0, 0.28),
+    0 0 28px rgba(159, 111, 255, 0.12);
+  overflow: hidden;
+}
+
+.hud-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top right, rgba(159, 111, 255, 0.16), transparent 34%),
+    radial-gradient(circle at bottom left, rgba(83, 243, 255, 0.1), transparent 36%);
+  pointer-events: none;
+}
+
+.hud-panel h2 {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 10px;
+  color: var(--cyan);
+  font-size: 0.84rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.hud-panel p {
+  position: relative;
+  z-index: 1;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+
+.panel-left {
+  left: 24px;
+  bottom: 24px;
+}
+
+.panel-right {
+  right: 24px;
+  top: 24px;
+}
+
+.quick-links {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.quick-links a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 10px;
+  font-size: 12px;
+  text-align: center;
+  border: 1px solid rgba(129, 223, 255, 0.24);
+  border-radius: 10px;
+  color: rgba(236, 250, 255, 0.92);
+  background: linear-gradient(180deg, rgba(30, 73, 102, 0.24), rgba(10, 22, 38, 0.54));
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, color 180ms ease,
+    background 180ms ease;
+}
+
+.quick-links a:hover {
+  transform: translateY(-2px);
+  border-color: rgba(116, 250, 255, 0.82);
+  box-shadow: 0 0 18px rgba(79, 253, 255, 0.32);
+  color: #fff;
+  background: linear-gradient(180deg, rgba(46, 99, 138, 0.3), rgba(12, 28, 48, 0.66));
+}
+
+.metric {
+  position: relative;
+  z-index: 1;
+  margin: 12px 0 0;
+}
+
+.metric span {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
   letter-spacing: 2px;
+  color: rgba(175, 223, 255, 0.9);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.metric i {
+  display: block;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(92, 132, 180, 0.26);
+  overflow: hidden;
+  position: relative;
+}
+
+.metric i::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--pct);
+  background: linear-gradient(90deg, var(--cyan), var(--blue), var(--violet));
+  box-shadow: 0 0 12px rgba(56, 255, 241, 0.55);
 }
 
 .tooltip {
   position: fixed;
-  padding: 6px 14px;
-  background: rgba(0, 255, 255, 0.15);
-  border: 1px solid rgba(0, 255, 255, 0.4);
-  border-radius: 6px;
-  font-size: 14px;
-  color: cyan;
+  padding: 10px 14px;
+  background: rgba(7, 16, 30, 0.84);
+  border: 1px solid rgba(83, 243, 255, 0.36);
+  border-radius: 12px;
+  font-size: 0.88rem;
+  color: var(--cyan);
   pointer-events: none;
   z-index: 10;
-  backdrop-filter: blur(4px);
+  box-shadow: 0 0 26px rgba(83, 243, 255, 0.18);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 footer {
   position: fixed;
-  bottom: 10px;
-  width: 100%;
-  text-align: center;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 4;
+  padding: 10px 16px;
+  border: 1px solid rgba(91, 228, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(7, 16, 30, 0.66);
+  color: rgba(201, 227, 255, 0.72);
   font-size: 12px;
-  opacity: 0.6;
-  z-index: 2;
+  letter-spacing: 0.08em;
+  text-align: center;
+  max-width: calc(100vw - 24px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 footer a {
-  color: white;
-  text-decoration: none;
+  color: var(--cyan);
 }
 
 @keyframes breatheText {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.045);
+  }
+}
+
+@keyframes sweep {
+  0% {
+    transform: translateY(-100%);
+  }
+
+  100% {
+    transform: translateY(120%);
+  }
+}
+
+@keyframes rain {
+  0% {
+    transform: translateY(-20%);
+    opacity: 0;
+  }
+
+  15% {
+    opacity: 0.8;
+  }
+
+  90% {
+    opacity: 0.5;
+  }
+
+  100% {
+    transform: translateY(170%);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header h1,
+  .scanline,
+  .matrix-col,
+  body::after {
+    animation: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .header {
+    left: 16px;
+    top: 16px;
+    width: calc(100vw - 32px);
+  }
+
+  .panel-right {
+    top: auto;
+    right: 16px;
+    bottom: 150px;
+    width: calc(100vw - 32px);
+  }
+
+  .panel-left {
+    left: 16px;
+    bottom: 16px;
+    width: calc(100vw - 32px);
+  }
+
+  .quick-links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .matrix-rain {
+    opacity: 0.12;
+  }
+
+  .tooltip {
+    max-width: calc(100vw - 24px);
+  }
+
+  footer {
+    width: calc(100vw - 24px);
+    line-height: 1.5;
+    font-size: 10px;
+  }
 }
 </style>
