@@ -23,11 +23,11 @@
   width: 42vw;
   height: 42vw;
   border-radius: 50%;
-  filter: blur(90px);
+  filter: blur(68px);
   opacity: 0.42;
   pointer-events: none;
   z-index: 0;
-  animation: drift 20s ease-in-out infinite alternate;
+  animation: drift 28s ease-in-out infinite alternate;
 }
 
 .app-shell__glow--cyan {
@@ -61,6 +61,12 @@
 
   100% {
     transform: translate3d(2.5%, -2%, 0) scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell__glow {
+    animation: none;
   }
 }
 </style>

@@ -29,6 +29,12 @@ let routeMeshes: THREE.Mesh[] = []
 let hoveredNode = ref<GraphNode | null>(null)
 let activeRouteNode: GraphNode | null = null
 const tooltipPosition = ref({ x: 0, y: 0 })
+let motionQuery: MediaQueryList | null = null
+let prefersReducedMotion = false
+
+const TARGET_FPS = 45
+const FRAME_INTERVAL = 1000 / TARGET_FPS
+let lastFrameTime = 0
 
 // 拖拽控制
 let isDragging = false
@@ -57,8 +63,13 @@ const graphConfig = {
 }
 
 onMounted(() => {
+  motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  prefersReducedMotion = motionQuery.matches
+  motionQuery.addEventListener('change', onMotionPreferenceChange)
+
   initThree()
   window.addEventListener('resize', onResize)
+  document.addEventListener('visibilitychange', onVisibilityChange)
   canvasRef.value?.addEventListener('click', onClick)
   canvasRef.value?.addEventListener('pointerdown', onPointerDown)
   canvasRef.value?.addEventListener('pointermove', onPointerMove)
@@ -70,7 +81,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   cancelAnimationFrame(animationId)
+  motionQuery?.removeEventListener('change', onMotionPreferenceChange)
   window.removeEventListener('resize', onResize)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   canvasRef.value?.removeEventListener('click', onClick)
   canvasRef.value?.removeEventListener('pointerdown', onPointerDown)
   canvasRef.value?.removeEventListener('pointermove', onPointerMove)
@@ -80,6 +93,20 @@ onUnmounted(() => {
   canvasRef.value?.removeEventListener('lostpointercapture', onPointerUp)
   renderer?.dispose()
 })
+
+function onMotionPreferenceChange(event: MediaQueryListEvent) {
+  prefersReducedMotion = event.matches
+  if (prefersReducedMotion) {
+    speedVelocity = 0
+    currentSpeed = MIN_SPEED
+  }
+}
+
+function onVisibilityChange() {
+  if (document.hidden) {
+    speedVelocity = 0
+  }
+}
 
 function createNode(label: string, position: THREE.Vector3, isRoute: boolean, route?: string): GraphNode {
   const size = isRoute ? 0.18 : 0.1
@@ -129,7 +156,8 @@ function initThree() {
   mouse = new THREE.Vector2()
 
   // 星际穿越星空 - 星星分布在Z轴上，从远到近
-  const starsCount = 1800
+  const isSmallScreen = window.innerWidth <= 768
+  const starsCount = prefersReducedMotion ? 420 : isSmallScreen ? 900 : 1400
   starsGeometry = new THREE.BufferGeometry()
   const positions = new Float32Array(starsCount * 3)
   const velocities = new Float32Array(starsCount)
@@ -241,6 +269,12 @@ function setHoveredRouteNode(node: GraphNode | null) {
 
 function animate(time = 0) {
   animationId = requestAnimationFrame(animate)
+  if (document.hidden) return
+
+  const elapsed = time - lastFrameTime
+  if (elapsed < FRAME_INTERVAL) return
+  lastFrameTime = time
+
   const t = time * 0.001
 
   // 平滑旋转
@@ -251,8 +285,10 @@ function animate(time = 0) {
   graphGroup.rotation.y = currentRotation.y
 
   // 呼吸缩放
-  const scale = 1 + Math.sin(t * 1.5) * 0.05
-  graphGroup.scale.set(scale, scale, scale)
+  if (!prefersReducedMotion) {
+    const scale = 1 + Math.sin(t * 1.5) * 0.05
+    graphGroup.scale.set(scale, scale, scale)
+  }
 
   // 飞行速度 - 加速度模型
   const targetSpeed = isDragging ? MIN_SPEED : FULL_SPEED
@@ -285,12 +321,14 @@ function animate(time = 0) {
   positionAttribute.needsUpdate = true
 
   // 节点脉冲
-  graphNodes.forEach((node, i) => {
-    if (node.isRoute) {
-      const pulse = 0.15 + Math.sin(t * 3 + i * 0.8) * 0.08
-      ;(node.glow.material as THREE.MeshBasicMaterial).opacity = pulse
-    }
-  })
+  if (!prefersReducedMotion) {
+    graphNodes.forEach((node, i) => {
+      if (node.isRoute) {
+        const pulse = 0.15 + Math.sin(t * 3 + i * 0.8) * 0.08
+        ;(node.glow.material as THREE.MeshBasicMaterial).opacity = pulse
+      }
+    })
+  }
 
   renderer.render(scene, camera)
 }
@@ -651,6 +689,14 @@ function onResize() {
   color: var(--cyan);
 }
 
+.home__hud,
+.home__status,
+.home__footer,
+.home__tooltip {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
 @keyframes breatheText {
   0%,
   100% {
@@ -692,6 +738,12 @@ function onResize() {
 
   .home__hud p {
     letter-spacing: 0.18em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home__hud h1 {
+    animation: none;
   }
 }
 </style>

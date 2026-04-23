@@ -74,7 +74,7 @@ body::after {
     radial-gradient(circle at 24% 24%, rgba(83, 243, 255, 0.14), transparent 16%),
     radial-gradient(circle at 72% 30%, rgba(159, 111, 255, 0.12), transparent 18%),
     radial-gradient(circle at 52% 78%, rgba(255, 104, 224, 0.1), transparent 18%);
-  filter: blur(22px);
+  filter: blur(16px);
   opacity: 0.9;
   animation: nebulaDrift 24s ease-in-out infinite alternate;
 }
@@ -106,9 +106,7 @@ select {
 .simple-page__card,
 .games-page,
 .home__hud,
-.home__status,
-.home__footer,
-.home__tooltip {
+.home__status {
   backdrop-filter: blur(22px);
   -webkit-backdrop-filter: blur(22px);
 }
@@ -496,5 +494,18 @@ select {
 
   .glass-button {
     width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::after {
+    animation: none;
+  }
+
+  .glass-button,
+  .game-card,
+  .game-card::before,
+  .back-link {
+    transition: none;
   }
 }
