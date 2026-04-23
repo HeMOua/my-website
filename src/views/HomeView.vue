@@ -25,7 +25,10 @@ let animationId: number
 let raycaster: THREE.Raycaster
 let mouse: THREE.Vector2
 let graphNodes: GraphNode[] = []
+let routeMeshes: THREE.Mesh[] = []
 let hoveredNode = ref<GraphNode | null>(null)
+let activeRouteNode: GraphNode | null = null
+const tooltipPosition = ref({ x: 0, y: 0 })
 
 // 拖拽控制
 let isDragging = false
@@ -34,12 +37,12 @@ let targetRotation = { x: 0, y: 0 }
 let currentRotation = { x: 0, y: 0 }
 
 // 飞行速度控制（加速度模型）
-const FULL_SPEED = 2
-const MIN_SPEED = 0.3
+const FULL_SPEED = 3.2
+const MIN_SPEED = 0.12
 let currentSpeed = FULL_SPEED
 let speedVelocity = 0 // 速度的变化率（加速度）
-const SPEED_ACCELERATION = 0.002 // 加速度
-const SPEED_DAMPING = 0.96 // 阻尼
+const SPEED_ACCELERATION = 0.014 // 加速度
+const SPEED_DAMPING = 0.88 // 阻尼
 
 // 图谱结构：中心节点 -> 主节点 -> 子节点
 const graphConfig = {
@@ -57,20 +60,24 @@ onMounted(() => {
   initThree()
   window.addEventListener('resize', onResize)
   canvasRef.value?.addEventListener('click', onClick)
-  canvasRef.value?.addEventListener('mousedown', onMouseDown)
-  canvasRef.value?.addEventListener('mousemove', onMouseMove)
-  canvasRef.value?.addEventListener('mouseup', onMouseUp)
-  canvasRef.value?.addEventListener('mouseleave', onMouseUp)
+  canvasRef.value?.addEventListener('pointerdown', onPointerDown)
+  canvasRef.value?.addEventListener('pointermove', onPointerMove)
+  canvasRef.value?.addEventListener('pointerup', onPointerUp)
+  canvasRef.value?.addEventListener('pointerleave', onPointerLeave)
+  canvasRef.value?.addEventListener('pointercancel', onPointerUp)
+  canvasRef.value?.addEventListener('lostpointercapture', onPointerUp)
 })
 
 onUnmounted(() => {
   cancelAnimationFrame(animationId)
   window.removeEventListener('resize', onResize)
   canvasRef.value?.removeEventListener('click', onClick)
-  canvasRef.value?.removeEventListener('mousedown', onMouseDown)
-  canvasRef.value?.removeEventListener('mousemove', onMouseMove)
-  canvasRef.value?.removeEventListener('mouseup', onMouseUp)
-  canvasRef.value?.removeEventListener('mouseleave', onMouseUp)
+  canvasRef.value?.removeEventListener('pointerdown', onPointerDown)
+  canvasRef.value?.removeEventListener('pointermove', onPointerMove)
+  canvasRef.value?.removeEventListener('pointerup', onPointerUp)
+  canvasRef.value?.removeEventListener('pointerleave', onPointerLeave)
+  canvasRef.value?.removeEventListener('pointercancel', onPointerUp)
+  canvasRef.value?.removeEventListener('lostpointercapture', onPointerUp)
   renderer?.dispose()
 })
 
@@ -111,14 +118,18 @@ function createEdge(from: THREE.Vector3, to: THREE.Vector3, opacity = 0.25) {
 function initThree() {
   scene = new THREE.Scene()
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
-  renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvasRef.value })
+  const canvas = canvasRef.value
+  if (!canvas) return
+
+  renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', canvas })
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5))
   renderer.setSize(window.innerWidth, window.innerHeight)
 
   raycaster = new THREE.Raycaster()
   mouse = new THREE.Vector2()
 
   // 星际穿越星空 - 星星分布在Z轴上，从远到近
-  const starsCount = 3000
+  const starsCount = 1800
   starsGeometry = new THREE.BufferGeometry()
   const positions = new Float32Array(starsCount * 3)
   const velocities = new Float32Array(starsCount)
@@ -197,12 +208,35 @@ function initThree() {
 
   // 主节点之间的横向连线（相邻）
   for (let i = 0; i < mainNodes.length; i++) {
-    const next = mainNodes[(i + 1) % mainNodes.length]
-    createEdge(mainNodes[i].position, next.position, 0.1)
+    const currentNode = mainNodes[i]!
+    const nextNode = mainNodes[(i + 1) % mainNodes.length]!
+    createEdge(currentNode.position, nextNode.position, 0.1)
   }
+
+  routeMeshes = graphNodes.filter(n => n.isRoute).map(n => n.mesh)
 
   camera.position.z = 8
   animate()
+}
+
+function setHoveredRouteNode(node: GraphNode | null) {
+  if (activeRouteNode === node) {
+    hoveredNode.value = node
+    return
+  }
+
+  if (activeRouteNode) {
+    ;(activeRouteNode.mesh.material as THREE.MeshBasicMaterial).color.setHex(0x00ffff)
+    ;(activeRouteNode.glow.material as THREE.MeshBasicMaterial).opacity = 0.15
+  }
+
+  activeRouteNode = node
+  hoveredNode.value = node
+
+  if (activeRouteNode) {
+    ;(activeRouteNode.mesh.material as THREE.MeshBasicMaterial).color.setHex(0xffffff)
+    ;(activeRouteNode.glow.material as THREE.MeshBasicMaterial).opacity = 0.5
+  }
 }
 
 function animate(time = 0) {
@@ -229,22 +263,26 @@ function animate(time = 0) {
   currentSpeed = Math.max(MIN_SPEED, Math.min(FULL_SPEED, currentSpeed))
 
   // 星际穿越效果 - 星星向相机移动
-  const positions = starsGeometry.attributes.position.array as Float32Array
-  const velocities = starsGeometry.attributes.velocity.array as Float32Array
+  const positionAttribute = starsGeometry.getAttribute('position') as THREE.BufferAttribute
+  const velocityAttribute = starsGeometry.getAttribute('velocity') as THREE.BufferAttribute
+  const positions = positionAttribute.array as Float32Array
+  const velocities = velocityAttribute.array as Float32Array
 
   for (let i = 0; i < positions.length / 3; i++) {
-    positions[i * 3 + 2] += velocities[i] * currentSpeed // 向前移动
+    const baseIndex = i * 3
+    const depthIndex = baseIndex + 2
+    positions[depthIndex]! += velocities[i]! * currentSpeed // 向前移动
 
     // 超过相机位置后重置到远处
-    if (positions[i * 3 + 2] > 100) {
-      positions[i * 3 + 2] = -1000
+    if (positions[depthIndex]! > 100) {
+      positions[depthIndex]! = -1000
       const angle = Math.random() * Math.PI * 2
       const radius = Math.random() * 800 + 100
-      positions[i * 3] = Math.cos(angle) * radius
-      positions[i * 3 + 1] = Math.sin(angle) * radius
+      positions[baseIndex]! = Math.cos(angle) * radius
+      positions[baseIndex + 1]! = Math.sin(angle) * radius
     }
   }
-  starsGeometry.attributes.position.needsUpdate = true
+  positionAttribute.needsUpdate = true
 
   // 节点脉冲
   graphNodes.forEach((node, i) => {
@@ -264,23 +302,28 @@ function onClick(event: MouseEvent) {
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
   raycaster.setFromCamera(mouse, camera)
 
-  const routeMeshes = graphNodes.filter(n => n.isRoute).map(n => n.mesh)
   const intersects = raycaster.intersectObjects(routeMeshes, true)
   if (intersects.length > 0) {
-    const target = intersects[0].object
-    if (target.userData?.route) {
+    const target = intersects[0]?.object
+    if (target?.userData?.route) {
       router.push(target.userData.route)
     }
   }
 }
 
-function onMouseDown(event: MouseEvent) {
+function onPointerDown(event: PointerEvent) {
   isDragging = true
+  speedVelocity = 0
   previousMousePosition = { x: event.clientX, y: event.clientY }
-  canvasRef.value!.style.cursor = 'grabbing'
+  canvasRef.value?.setPointerCapture(event.pointerId)
+  if (canvasRef.value) {
+    canvasRef.value.style.cursor = 'grabbing'
+  }
 }
 
-function onMouseMove(event: MouseEvent) {
+function onPointerMove(event: PointerEvent) {
+  updateTooltipPosition(event.clientX, event.clientY)
+
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
 
@@ -298,59 +341,109 @@ function onMouseMove(event: MouseEvent) {
   } else {
     // 悬停检测
     raycaster.setFromCamera(mouse, camera)
-    const routeMeshes = graphNodes.filter(n => n.isRoute).map(n => n.mesh)
     const intersects = raycaster.intersectObjects(routeMeshes, true)
 
-    // 重置
-    graphNodes.forEach(n => {
-      if (n.isRoute) {
-        ;(n.mesh.material as THREE.MeshBasicMaterial).color.setHex(0x00ffff)
-        ;(n.glow.material as THREE.MeshBasicMaterial).opacity = 0.15
-      }
-    })
-
     if (intersects.length > 0) {
-      const target = intersects[0].object
+      const target = intersects[0]?.object
       const node = graphNodes.find(n => n.mesh === target)
       if (node) {
-        hoveredNode.value = node
-        ;(node.mesh.material as THREE.MeshBasicMaterial).color.setHex(0xffffff)
-        ;(node.glow.material as THREE.MeshBasicMaterial).opacity = 0.5
+        setHoveredRouteNode(node)
         canvasRef.value!.style.cursor = 'pointer'
       }
     } else {
-      hoveredNode.value = null
-      canvasRef.value!.style.cursor = 'grab'
+      setHoveredRouteNode(null)
+      if (canvasRef.value) {
+        canvasRef.value.style.cursor = 'grab'
+      }
     }
   }
 }
 
-function onMouseUp() {
+function onPointerUp(event: PointerEvent) {
   isDragging = false
-  canvasRef.value!.style.cursor = 'grab'
+  if (canvasRef.value?.hasPointerCapture(event.pointerId)) {
+    canvasRef.value.releasePointerCapture(event.pointerId)
+  }
+  if (canvasRef.value) {
+    canvasRef.value.style.cursor = 'grab'
+  }
+}
+
+function onPointerLeave() {
+  isDragging = false
+  setHoveredRouteNode(null)
+  if (canvasRef.value) {
+    canvasRef.value.style.cursor = 'grab'
+  }
+}
+
+function updateTooltipPosition(clientX: number, clientY: number) {
+  const tooltipOffsetX = 16
+  const tooltipOffsetY = 18
+  const tooltipWidth = 180
+  const tooltipHeight = 44
+  const maxX = window.innerWidth - tooltipWidth - 8
+  const maxY = window.innerHeight - tooltipHeight - 8
+
+  tooltipPosition.value = {
+    x: Math.max(8, Math.min(clientX + tooltipOffsetX, maxX)),
+    y: Math.max(8, Math.min(clientY + tooltipOffsetY, maxY)),
+  }
 }
 
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight
   camera.updateProjectionMatrix()
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5))
   renderer.setSize(window.innerWidth, window.innerHeight)
 }
 </script>
 
 <template>
   <div class="home">
+    <div class="home__grid"></div>
+    <div class="home__vignette"></div>
     <canvas ref="canvasRef" class="canvas"></canvas>
 
-    <div class="header">
+    <section class="home__hud">
+      <div class="eyebrow home__eyebrow">未来导航</div>
       <h1>技数斋</h1>
       <p>探索未知 · 创造未来</p>
-    </div>
 
-    <div v-if="hoveredNode" class="tooltip">
+      <div class="home__chips">
+        <span>三维星图</span>
+        <span>霓虹图谱</span>
+        <span>HUD 界面</span>
+      </div>
+    </section>
+
+    <aside class="home__status">
+      <div class="home__status-title">系统面板</div>
+      <div class="home__status-grid">
+        <div>
+          <strong>05</strong>
+          <span>主节点</span>
+        </div>
+        <div>
+          <strong>01</strong>
+          <span>核心节点</span>
+        </div>
+        <div>
+          <strong>∞</strong>
+          <span>动态星轨</span>
+        </div>
+      </div>
+    </aside>
+
+    <div
+      v-if="hoveredNode"
+      class="home__tooltip"
+      :style="{ left: `${tooltipPosition.x}px`, top: `${tooltipPosition.y}px` }"
+    >
       {{ hoveredNode.label }}
     </div>
 
-    <footer>
+    <footer class="home__footer">
       技数斋 <a href="https://beian.miit.gov.cn/" target="_blank">皖ICP备2025076226号-1</a> | Copyright © 2025-present 贺墨于
     </footer>
   </div>
@@ -361,7 +454,31 @@ function onResize() {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(83, 243, 255, 0.06), transparent 22%),
+    radial-gradient(circle at 76% 24%, rgba(159, 111, 255, 0.08), transparent 18%),
+    linear-gradient(180deg, rgba(2, 6, 15, 0.2), rgba(2, 5, 13, 0.72));
+}
+
+.home__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(83, 243, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(83, 243, 255, 0.08) 1px, transparent 1px);
+  background-size: 84px 84px;
+  opacity: 0.2;
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, transparent 0%, black 18%, black 82%, transparent 100%);
+}
+
+.home__vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at center, transparent 20%, rgba(2, 6, 15, 0.22) 60%, rgba(2, 4, 9, 0.8) 100%);
 }
 
 .canvas {
@@ -371,60 +488,210 @@ function onResize() {
   width: 100%;
   height: 100%;
   cursor: grab;
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  z-index: 0;
 }
 
-.header {
+.home__hud {
   position: absolute;
-  top: 32px;
-  left: 40px;
-  z-index: 1;
+  top: 24px;
+  left: 24px;
+  z-index: 2;
+  width: min(360px, calc(100vw - 48px));
+  padding: 22px 24px;
+  border: 1px solid rgba(91, 228, 255, 0.18);
+  border-radius: 24px;
+  background: linear-gradient(160deg, rgba(10, 18, 33, 0.76), rgba(6, 14, 26, 0.54));
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.34), 0 0 36px rgba(83, 243, 255, 0.16);
+  overflow: hidden;
   pointer-events: none;
 }
 
-.header h1 {
-  font-size: 36px;
-  letter-spacing: 4px;
-  text-shadow: 0 0 20px cyan, 0 0 40px cyan;
+.home__hud::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top right, rgba(159, 111, 255, 0.18), transparent 34%),
+    radial-gradient(circle at bottom left, rgba(83, 243, 255, 0.12), transparent 36%);
+  pointer-events: none;
+}
+
+.home__hud h1 {
+  margin-top: 14px;
+  font-size: clamp(2.3rem, 5vw, 4.7rem);
+  line-height: 0.96;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 20px rgba(83, 243, 255, 0.3), 0 0 44px rgba(159, 111, 255, 0.18);
   animation: breatheText 4s ease-in-out infinite;
+  position: relative;
+  z-index: 1;
 }
 
-.header p {
-  opacity: 0.6;
-  font-size: 14px;
-  margin-top: 8px;
-  letter-spacing: 2px;
+.home__hud p {
+  margin-top: 10px;
+  color: rgba(201, 227, 255, 0.72);
+  font-size: 0.8rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  position: relative;
+  z-index: 1;
 }
 
-.tooltip {
+.home__eyebrow {
+  position: relative;
+  z-index: 1;
+}
+
+.home__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+  position: relative;
+  z-index: 1;
+}
+
+.home__chips span {
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(91, 228, 255, 0.15);
+  background: rgba(8, 16, 31, 0.72);
+  color: rgba(237, 247, 255, 0.84);
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.home__status {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 2;
+  width: min(300px, calc(100vw - 48px));
+  padding: 18px;
+  border: 1px solid rgba(91, 228, 255, 0.16);
+  border-radius: 22px;
+  background: linear-gradient(160deg, rgba(10, 18, 33, 0.7), rgba(6, 14, 26, 0.46));
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28), 0 0 28px rgba(159, 111, 255, 0.12);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.home__status-title {
+  font-size: 0.76rem;
+  color: var(--cyan);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.home__status-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.home__status-grid div {
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(91, 228, 255, 0.12);
+  background: rgba(7, 16, 30, 0.58);
+}
+
+.home__status-grid strong {
+  display: block;
+  font-size: 1.3rem;
+  letter-spacing: 0.08em;
+}
+
+.home__status-grid span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.home__tooltip {
   position: fixed;
-  padding: 6px 14px;
-  background: rgba(0, 255, 255, 0.15);
-  border: 1px solid rgba(0, 255, 255, 0.4);
-  border-radius: 6px;
-  font-size: 14px;
-  color: cyan;
+  padding: 10px 14px;
+  background: rgba(7, 16, 30, 0.82);
+  border: 1px solid rgba(83, 243, 255, 0.36);
+  border-radius: 12px;
+  font-size: 0.88rem;
+  color: var(--cyan);
   pointer-events: none;
   z-index: 10;
-  backdrop-filter: blur(4px);
+  box-shadow: 0 0 26px rgba(83, 243, 255, 0.18);
 }
 
-footer {
+.home__footer {
   position: fixed;
-  bottom: 10px;
-  width: 100%;
-  text-align: center;
-  font-size: 12px;
-  opacity: 0.6;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
   z-index: 2;
+  padding: 10px 16px;
+  border: 1px solid rgba(91, 228, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(7, 16, 30, 0.64);
+  color: rgba(201, 227, 255, 0.72);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-align: center;
+  max-width: calc(100vw - 24px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
 }
 
-footer a {
-  color: white;
-  text-decoration: none;
+.home__footer a {
+  color: var(--cyan);
 }
 
 @keyframes breatheText {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+@media (max-width: 900px) {
+  .home__status {
+    top: auto;
+    right: 16px;
+    bottom: 88px;
+  }
+}
+
+@media (max-width: 768px) {
+  .home__hud {
+    top: 16px;
+    left: 16px;
+    width: calc(100vw - 32px);
+  }
+
+  .home__status {
+    left: 16px;
+    right: 16px;
+    bottom: 92px;
+    width: auto;
+  }
+
+  .home__footer {
+    width: calc(100vw - 24px);
+    line-height: 1.5;
+    font-size: 10px;
+  }
+
+  .home__hud p {
+    letter-spacing: 0.18em;
+  }
 }
 </style>

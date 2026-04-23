@@ -2,43 +2,23 @@
 </script>
 
 <template>
-  <div class="page">
-    <h1>工具</h1>
-    <p>在线工具建设中...</p>
-    <router-link to="/">返回首页</router-link>
+  <div class="simple-page">
+    <section class="simple-page__card">
+      <div class="eyebrow">Utility grid</div>
+      <h1 class="simple-page__title">工具</h1>
+      <p class="simple-page__lead">
+        这里会收纳在线工具、效率小组件和辅助脚本。整体界面以控制台和仪表盘的混合风格呈现。
+      </p>
+
+      <div class="tag-row">
+        <span class="tag">Converter</span>
+        <span class="tag">Generator</span>
+        <span class="tag">Workflow</span>
+      </div>
+
+      <div class="simple-page__actions">
+        <router-link to="/" class="glass-button">返回首页</router-link>
+      </div>
+    </section>
   </div>
 </template>
-
-<style scoped>
-.page {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-  gap: 16px;
-}
-
-h1 {
-  font-size: 48px;
-  text-shadow: 0 0 20px cyan;
-}
-
-p {
-  opacity: 0.6;
-  font-size: 18px;
-}
-
-a {
-  margin-top: 24px;
-  color: cyan;
-  border: 1px solid rgba(0, 255, 255, 0.4);
-  padding: 8px 24px;
-  border-radius: 6px;
-  transition: all 0.3s;
-}
-
-a:hover {
-  background: rgba(0, 255, 255, 0.15);
-}
-</style>

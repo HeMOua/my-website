@@ -2,43 +2,23 @@
 </script>
 
 <template>
-  <div class="page">
-    <h1>联系</h1>
-    <p>联系方式建设中...</p>
-    <router-link to="/">返回首页</router-link>
+  <div class="simple-page">
+    <section class="simple-page__card">
+      <div class="eyebrow">Live signal</div>
+      <h1 class="simple-page__title">联系</h1>
+      <p class="simple-page__lead">
+        这里会整合邮件、社交账号与协作入口，让访客像读取控制台一样快速找到你。
+      </p>
+
+      <div class="tag-row">
+        <span class="tag">Email</span>
+        <span class="tag">GitHub</span>
+        <span class="tag">WeChat</span>
+      </div>
+
+      <div class="simple-page__actions">
+        <router-link to="/" class="glass-button">返回首页</router-link>
+      </div>
+    </section>
   </div>
 </template>
-
-<style scoped>
-.page {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-  gap: 16px;
-}
-
-h1 {
-  font-size: 48px;
-  text-shadow: 0 0 20px cyan;
-}
-
-p {
-  opacity: 0.6;
-  font-size: 18px;
-}
-
-a {
-  margin-top: 24px;
-  color: cyan;
-  border: 1px solid rgba(0, 255, 255, 0.4);
-  padding: 8px 24px;
-  border-radius: 6px;
-  transition: all 0.3s;
-}
-
-a:hover {
-  background: rgba(0, 255, 255, 0.15);
-}
-</style>

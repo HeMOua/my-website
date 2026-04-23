@@ -2,43 +2,23 @@
 </script>
 
 <template>
-  <div class="page">
-    <h1>项目</h1>
-    <p>项目展示建设中...</p>
-    <router-link to="/">返回首页</router-link>
+  <div class="simple-page">
+    <section class="simple-page__card">
+      <div class="eyebrow">Workbench</div>
+      <h1 class="simple-page__title">项目</h1>
+      <p class="simple-page__lead">
+        这里将展示作品集、实验项目和开源仓库。当前采用高对比玻璃面板，先把项目入口的观感提起来。
+      </p>
+
+      <div class="tag-row">
+        <span class="tag">Open Source</span>
+        <span class="tag">Demo</span>
+        <span class="tag">Product</span>
+      </div>
+
+      <div class="simple-page__actions">
+        <router-link to="/" class="glass-button">返回首页</router-link>
+      </div>
+    </section>
   </div>
 </template>
-
-<style scoped>
-.page {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-  gap: 16px;
-}
-
-h1 {
-  font-size: 48px;
-  text-shadow: 0 0 20px cyan;
-}
-
-p {
-  opacity: 0.6;
-  font-size: 18px;
-}
-
-a {
-  margin-top: 24px;
-  color: cyan;
-  border: 1px solid rgba(0, 255, 255, 0.4);
-  padding: 8px 24px;
-  border-radius: 6px;
-  transition: all 0.3s;
-}
-
-a:hover {
-  background: rgba(0, 255, 255, 0.15);
-}
-</style>

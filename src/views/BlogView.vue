@@ -2,43 +2,23 @@
 </script>
 
 <template>
-  <div class="page">
-    <h1>博客</h1>
-    <p>博客内容建设中...</p>
-    <router-link to="/">返回首页</router-link>
+  <div class="simple-page">
+    <section class="simple-page__card">
+      <div class="eyebrow">Signal log</div>
+      <h1 class="simple-page__title">博客</h1>
+      <p class="simple-page__lead">
+        这里会放技术记录、思考笔记和项目复盘。现在先用更有未来感的杂志式信息块，作为内容入口。
+      </p>
+
+      <div class="tag-row">
+        <span class="tag">Articles</span>
+        <span class="tag">Notes</span>
+        <span class="tag">Experiments</span>
+      </div>
+
+      <div class="simple-page__actions">
+        <router-link to="/" class="glass-button">返回首页</router-link>
+      </div>
+    </section>
   </div>
 </template>
-
-<style scoped>
-.page {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-  gap: 16px;
-}
-
-h1 {
-  font-size: 48px;
-  text-shadow: 0 0 20px cyan;
-}
-
-p {
-  opacity: 0.6;
-  font-size: 18px;
-}
-
-a {
-  margin-top: 24px;
-  color: cyan;
-  border: 1px solid rgba(0, 255, 255, 0.4);
-  padding: 8px 24px;
-  border-radius: 6px;
-  transition: all 0.3s;
-}
-
-a:hover {
-  background: rgba(0, 255, 255, 0.15);
-}
-</style>
