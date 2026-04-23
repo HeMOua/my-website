@@ -32,6 +32,7 @@ let isDragging = false
 let previousMousePosition = { x: 0, y: 0 }
 let targetRotation = { x: 0, y: 0 }
 let currentRotation = { x: 0, y: 0 }
+let touchMoved = false
 
 // 飞行速度控制（加速度模型）
 const FULL_SPEED = 2
@@ -61,6 +62,10 @@ onMounted(() => {
   canvasRef.value?.addEventListener('mousemove', onMouseMove)
   canvasRef.value?.addEventListener('mouseup', onMouseUp)
   canvasRef.value?.addEventListener('mouseleave', onMouseUp)
+  canvasRef.value?.addEventListener('touchstart', onTouchStart)
+  canvasRef.value?.addEventListener('touchmove', onTouchMove, { passive: false })
+  canvasRef.value?.addEventListener('touchend', onTouchEnd)
+  canvasRef.value?.addEventListener('touchcancel', onTouchEnd)
 })
 
 onUnmounted(() => {
@@ -71,6 +76,10 @@ onUnmounted(() => {
   canvasRef.value?.removeEventListener('mousemove', onMouseMove)
   canvasRef.value?.removeEventListener('mouseup', onMouseUp)
   canvasRef.value?.removeEventListener('mouseleave', onMouseUp)
+  canvasRef.value?.removeEventListener('touchstart', onTouchStart)
+  canvasRef.value?.removeEventListener('touchmove', onTouchMove)
+  canvasRef.value?.removeEventListener('touchend', onTouchEnd)
+  canvasRef.value?.removeEventListener('touchcancel', onTouchEnd)
   renderer?.dispose()
 })
 
@@ -111,7 +120,7 @@ function createEdge(from: THREE.Vector3, to: THREE.Vector3, opacity = 0.25) {
 function initThree() {
   scene = new THREE.Scene()
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
-  renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvasRef.value })
+  renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvasRef.value! })
   renderer.setSize(window.innerWidth, window.innerHeight)
 
   raycaster = new THREE.Raycaster()
@@ -198,7 +207,7 @@ function initThree() {
   // 主节点之间的横向连线（相邻）
   for (let i = 0; i < mainNodes.length; i++) {
     const next = mainNodes[(i + 1) % mainNodes.length]
-    createEdge(mainNodes[i].position, next.position, 0.1)
+    createEdge(mainNodes[i]!.position, next!.position, 0.1)
   }
 
   camera.position.z = 8
@@ -229,22 +238,25 @@ function animate(time = 0) {
   currentSpeed = Math.max(MIN_SPEED, Math.min(FULL_SPEED, currentSpeed))
 
   // 星际穿越效果 - 星星向相机移动
-  const positions = starsGeometry.attributes.position.array as Float32Array
-  const velocities = starsGeometry.attributes.velocity.array as Float32Array
+  const positions = starsGeometry.attributes.position!.array as Float32Array
+  const velocities = starsGeometry.attributes.velocity!.array as Float32Array
 
   for (let i = 0; i < positions.length / 3; i++) {
-    positions[i * 3 + 2] += velocities[i] * currentSpeed // 向前移动
+    const zIndex = i * 3 + 2
+    const currentZ = positions[zIndex] ?? 0
+    const velocity = velocities[i] ?? 0
+    positions[zIndex] = currentZ + velocity * currentSpeed // 向前移动
 
     // 超过相机位置后重置到远处
-    if (positions[i * 3 + 2] > 100) {
-      positions[i * 3 + 2] = -1000
+    if ((positions[zIndex] ?? 0) > 100) {
+      positions[zIndex] = -1000
       const angle = Math.random() * Math.PI * 2
       const radius = Math.random() * 800 + 100
       positions[i * 3] = Math.cos(angle) * radius
       positions[i * 3 + 1] = Math.sin(angle) * radius
     }
   }
-  starsGeometry.attributes.position.needsUpdate = true
+  starsGeometry.attributes.position!.needsUpdate = true
 
   // 节点脉冲
   graphNodes.forEach((node, i) => {
@@ -260,14 +272,18 @@ function animate(time = 0) {
 function onClick(event: MouseEvent) {
   if (isDragging) return
 
-  mouse.x = (event.clientX / window.innerWidth) * 2 - 1
-  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
+  pickRouteByPoint(event.clientX, event.clientY)
+}
+
+function pickRouteByPoint(clientX: number, clientY: number) {
+  mouse.x = (clientX / window.innerWidth) * 2 - 1
+  mouse.y = -(clientY / window.innerHeight) * 2 + 1
   raycaster.setFromCamera(mouse, camera)
 
   const routeMeshes = graphNodes.filter(n => n.isRoute).map(n => n.mesh)
   const intersects = raycaster.intersectObjects(routeMeshes, true)
   if (intersects.length > 0) {
-    const target = intersects[0].object
+    const target = intersects[0]!.object
     if (target.userData?.route) {
       router.push(target.userData.route)
     }
@@ -310,7 +326,7 @@ function onMouseMove(event: MouseEvent) {
     })
 
     if (intersects.length > 0) {
-      const target = intersects[0].object
+      const target = intersects[0]!.object
       const node = graphNodes.find(n => n.mesh === target)
       if (node) {
         hoveredNode.value = node
@@ -328,6 +344,44 @@ function onMouseMove(event: MouseEvent) {
 function onMouseUp() {
   isDragging = false
   canvasRef.value!.style.cursor = 'grab'
+}
+
+function onTouchStart(event: TouchEvent) {
+  if (event.touches.length === 0) return
+
+  const touch = event.touches[0]!
+  isDragging = true
+  touchMoved = false
+  previousMousePosition = { x: touch.clientX, y: touch.clientY }
+}
+
+function onTouchMove(event: TouchEvent) {
+  if (!isDragging || event.touches.length === 0) return
+
+  const touch = event.touches[0]!
+  const deltaX = touch.clientX - previousMousePosition.x
+  const deltaY = touch.clientY - previousMousePosition.y
+
+  if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
+    touchMoved = true
+  }
+
+  targetRotation.y += deltaX * 0.005
+  targetRotation.x += deltaY * 0.005
+  targetRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetRotation.x))
+
+  previousMousePosition = { x: touch.clientX, y: touch.clientY }
+  event.preventDefault()
+}
+
+function onTouchEnd(event: TouchEvent) {
+  if (!isDragging) return
+
+  isDragging = false
+  if (!touchMoved && event.changedTouches.length > 0) {
+    const touch = event.changedTouches[0]!
+    pickRouteByPoint(touch.clientX, touch.clientY)
+  }
 }
 
 function onResize() {
@@ -371,6 +425,7 @@ function onResize() {
   width: 100%;
   height: 100%;
   cursor: grab;
+  touch-action: none;
 }
 
 .header {
