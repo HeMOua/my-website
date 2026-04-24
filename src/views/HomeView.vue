@@ -31,6 +31,9 @@ let activeRouteNode: GraphNode | null = null
 const tooltipPosition = ref({ x: 0, y: 0 })
 let motionQuery: MediaQueryList | null = null
 let prefersReducedMotion = false
+const isMobileViewport = ref(false)
+const isHudCollapsed = ref(false)
+const isStatusCollapsed = ref(false)
 
 const TARGET_FPS = 45
 const FRAME_INTERVAL = 1000 / TARGET_FPS
@@ -63,6 +66,7 @@ const graphConfig = {
 }
 
 onMounted(() => {
+  syncViewportState()
   motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
   prefersReducedMotion = motionQuery.matches
   motionQuery.addEventListener('change', onMotionPreferenceChange)
@@ -430,10 +434,34 @@ function updateTooltipPosition(clientX: number, clientY: number) {
 }
 
 function onResize() {
+  syncViewportState()
   camera.aspect = window.innerWidth / window.innerHeight
   camera.updateProjectionMatrix()
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5))
   renderer.setSize(window.innerWidth, window.innerHeight)
+}
+
+function syncViewportState() {
+  isMobileViewport.value = window.innerWidth <= 768
+  if (!isMobileViewport.value) {
+    isHudCollapsed.value = false
+    isStatusCollapsed.value = false
+  }
+}
+
+function toggleHudPanel() {
+  if (!isMobileViewport.value) return
+  isHudCollapsed.value = !isHudCollapsed.value
+}
+
+function toggleStatusPanel() {
+  if (!isMobileViewport.value) return
+  isStatusCollapsed.value = !isStatusCollapsed.value
+}
+
+function navigateToRoute(route?: string) {
+  if (!route) return
+  router.push(route)
 }
 </script>
 
@@ -443,21 +471,61 @@ function onResize() {
     <div class="home__vignette"></div>
     <canvas ref="canvasRef" class="canvas"></canvas>
 
-    <section class="home__hud">
-      <div class="eyebrow home__eyebrow">未来导航</div>
-      <h1>技数斋</h1>
-      <p>探索未知 · 创造未来</p>
+    <section class="home__hud" :class="{ 'is-collapsed': isMobileViewport && isHudCollapsed }">
+      <div class="home__panel-head">
+        <div class="eyebrow home__eyebrow">未来导航</div>
+        <button
+          class="home__panel-toggle"
+          type="button"
+          :aria-expanded="!isHudCollapsed"
+          @click="toggleHudPanel"
+        >
+          {{ isHudCollapsed ? '展开' : '压缩' }}
+        </button>
+      </div>
 
-      <div class="home__chips">
-        <span>三维星图</span>
-        <span>霓虹图谱</span>
-        <span>HUD 界面</span>
+      <div v-show="!isMobileViewport || !isHudCollapsed" class="home__panel-body">
+        <h1>技数斋</h1>
+        <p>探索未知 · 创造未来</p>
+
+        <div class="home__chips">
+          <span>三维星图</span>
+          <span>霓虹图谱</span>
+          <span>HUD 界面</span>
+        </div>
+
+        <div class="home__main-nav">
+          <div class="home__main-nav-title">主节点导航</div>
+          <div class="home__main-nav-list">
+            <button
+              v-for="node in graphConfig.mainNodes"
+              :key="node.label"
+              class="home__main-nav-item"
+              :class="{ 'is-active': hoveredNode?.label === node.label }"
+              type="button"
+              @click="navigateToRoute(node.route)"
+            >
+              <span class="home__main-nav-dot"></span>
+              <span class="home__main-nav-label">{{ node.label }}</span>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
-    <aside class="home__status">
-      <div class="home__status-title">系统面板</div>
-      <div class="home__status-grid">
+    <aside class="home__status" :class="{ 'is-collapsed': isMobileViewport && isStatusCollapsed }">
+      <div class="home__panel-head">
+        <div class="home__status-title">系统面板</div>
+        <button
+          class="home__panel-toggle"
+          type="button"
+          :aria-expanded="!isStatusCollapsed"
+          @click="toggleStatusPanel"
+        >
+          {{ isStatusCollapsed ? '展开' : '压缩' }}
+        </button>
+      </div>
+      <div v-show="!isMobileViewport || !isStatusCollapsed" class="home__status-grid">
         <div>
           <strong>05</strong>
           <span>主节点</span>
@@ -489,6 +557,9 @@ function onResize() {
 
 <style scoped>
 .home {
+  --home-bottom-safe: 14px;
+  --home-bottom-gap: 12px;
+  --home-footer-height: 44px;
   position: relative;
   width: 100vw;
   height: 100vh;
@@ -584,6 +655,42 @@ function onResize() {
   z-index: 1;
 }
 
+.home__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  position: relative;
+  z-index: 1;
+}
+
+.home__panel-body {
+  position: relative;
+  z-index: 1;
+}
+
+.home__panel-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(83, 243, 255, 0.24);
+  background: rgba(7, 16, 30, 0.62);
+  color: var(--cyan);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 180ms ease, background-color 180ms ease, color 180ms ease;
+}
+
+.home__panel-toggle:hover {
+  border-color: rgba(83, 243, 255, 0.52);
+  background: rgba(7, 16, 30, 0.84);
+  color: #fff;
+}
+
 .home__chips {
   display: flex;
   flex-wrap: wrap;
@@ -604,9 +711,70 @@ function onResize() {
   text-transform: uppercase;
 }
 
+.home__main-nav {
+  margin-top: 16px;
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.home__main-nav-title {
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.home__main-nav-list {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.home__main-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(91, 228, 255, 0.16);
+  background: rgba(7, 16, 30, 0.66);
+  color: rgba(237, 247, 255, 0.88);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.home__main-nav-item:hover {
+  border-color: rgba(83, 243, 255, 0.46);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.24), 0 0 20px rgba(83, 243, 255, 0.14);
+}
+
+.home__main-nav-item.is-active {
+  border-color: rgba(83, 243, 255, 0.56);
+  box-shadow: 0 0 22px rgba(83, 243, 255, 0.22);
+}
+
+.home__main-nav-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--cyan);
+  box-shadow: 0 0 10px rgba(83, 243, 255, 0.7);
+  flex-shrink: 0;
+}
+
+.home__main-nav-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+}
+
 .home__status {
   position: absolute;
-  top: 24px;
+  bottom: calc(var(--home-bottom-safe) + var(--home-footer-height) + var(--home-bottom-gap));
   right: 24px;
   z-index: 2;
   width: min(300px, calc(100vw - 48px));
@@ -614,7 +782,7 @@ function onResize() {
   border: 1px solid rgba(91, 228, 255, 0.16);
   border-radius: 22px;
   background: linear-gradient(160deg, rgba(10, 18, 33, 0.7), rgba(6, 14, 26, 0.46));
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28), 0 0 28px rgba(159, 111, 255, 0.12);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3), 0 0 24px rgba(83, 243, 255, 0.12);
   overflow: hidden;
   pointer-events: none;
 }
@@ -670,7 +838,7 @@ function onResize() {
 .home__footer {
   position: fixed;
   left: 50%;
-  bottom: 14px;
+  bottom: var(--home-bottom-safe);
   transform: translateX(-50%);
   z-index: 2;
   padding: 10px 16px;
@@ -682,7 +850,7 @@ function onResize() {
   letter-spacing: 0.08em;
   text-align: center;
   max-width: calc(100vw - 24px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3), 0 0 24px rgba(83, 243, 255, 0.12);
 }
 
 .home__footer a {
@@ -708,36 +876,73 @@ function onResize() {
   }
 }
 
-@media (max-width: 900px) {
-  .home__status {
-    top: auto;
-    right: 16px;
-    bottom: 88px;
-  }
-}
-
 @media (max-width: 768px) {
+  .home {
+    display: flex;
+    flex-direction: column;
+    --home-bottom-safe: 0px;
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-y: auto;
+    padding: 16px 16px 14px;
+  }
+
+  .canvas {
+    position: fixed;
+    inset: 0;
+  }
+
   .home__hud {
-    top: 16px;
-    left: 16px;
-    width: calc(100vw - 32px);
+    position: relative;
+    top: auto;
+    left: auto;
+    width: 100%;
+    padding: 18px;
+    border-radius: 18px;
+    pointer-events: auto;
   }
 
   .home__status {
-    left: 16px;
-    right: 16px;
-    bottom: 92px;
-    width: auto;
+    position: relative;
+    top: auto;
+    right: auto;
+    left: auto;
+    bottom: auto;
+    width: 100%;
+    margin-top: auto;
+    margin-bottom: var(--home-bottom-gap);
+    border-radius: 18px;
+    pointer-events: auto;
   }
 
   .home__footer {
-    width: calc(100vw - 24px);
+    position: relative;
+    left: auto;
+    bottom: auto;
+    transform: none;
+    width: 100%;
+    margin-top: 0;
     line-height: 1.5;
     font-size: 10px;
+    pointer-events: auto;
   }
 
   .home__hud p {
     letter-spacing: 0.18em;
+  }
+
+  .home__panel-toggle {
+    display: inline-flex;
+  }
+
+  .home__hud.is-collapsed,
+  .home__status.is-collapsed {
+    padding-bottom: 14px;
+  }
+
+  .home__main-nav-list {
+    grid-template-columns: 1fr;
   }
 }
 
