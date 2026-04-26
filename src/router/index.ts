@@ -93,6 +93,11 @@ const router = createRouter({
       name: 'game-dodge',
       component: () => import('../views/games/GameDodgeView.vue'),
     },
+    {
+      path: '/games/gomoku-online',
+      name: 'game-gomoku-online',
+      component: () => import('../views/games/GameGomokuOnlineView.vue'),
+    },
   ],
 })
 
