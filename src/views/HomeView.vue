@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import * as THREE from 'three'
 
@@ -57,13 +57,14 @@ const SPEED_DAMPING = 0.88 // 阻尼
 const graphConfig = {
   center: { label: '技数斋' },
   mainNodes: [
-    { label: '博客', route: '/blog', children: ['前端', '后端', 'AI'] },
+    { label: '博客', route: '/blog', children: ['前端', '后端', '人工智能'] },
     { label: '项目', route: '/projects', children: ['开源', '工具库', 'Demo'] },
-    { label: '游戏', route: '/games', children: ['策略益智', '动作反应', '经典街机'] },
-    { label: '关于', route: '/about', children: ['简介', '技术栈', '经历'] },
-    { label: '联系', route: '/contact', children: ['邮件', 'GitHub', '微信'] },
+    { label: '游戏', route: '/games', children: ['在线游戏', '联机游戏'] },
+    { label: '关于与联系', route: '/about', children: ['简介', '合作方式', '联系方式'] },
   ],
 }
+
+const mainNodeCountLabel = computed(() => graphConfig.mainNodes.length.toString().padStart(2, '0'))
 
 onMounted(() => {
   syncViewportState()
@@ -527,7 +528,7 @@ function navigateToRoute(route?: string) {
       </div>
       <div v-show="!isMobileViewport || !isStatusCollapsed" class="home__status-grid">
         <div>
-          <strong>05</strong>
+          <strong>{{ mainNodeCountLabel }}</strong>
           <span>主节点</span>
         </div>
         <div>
@@ -614,6 +615,8 @@ function navigateToRoute(route?: string) {
   border: 1px solid rgba(91, 228, 255, 0.18);
   border-radius: 24px;
   background: linear-gradient(160deg, rgba(10, 18, 33, 0.76), rgba(6, 14, 26, 0.54));
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.34), 0 0 36px rgba(83, 243, 255, 0.16);
   overflow: hidden;
   pointer-events: none;
@@ -651,6 +654,17 @@ function navigateToRoute(route?: string) {
 }
 
 .home__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(91, 228, 255, 0.22);
+  background: rgba(83, 243, 255, 0.08);
+  color: var(--cyan);
+  font-size: 0.74rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
   position: relative;
   z-index: 1;
 }
@@ -782,6 +796,8 @@ function navigateToRoute(route?: string) {
   border: 1px solid rgba(91, 228, 255, 0.16);
   border-radius: 22px;
   background: linear-gradient(160deg, rgba(10, 18, 33, 0.7), rgba(6, 14, 26, 0.46));
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3), 0 0 24px rgba(83, 243, 255, 0.12);
   overflow: hidden;
   pointer-events: none;

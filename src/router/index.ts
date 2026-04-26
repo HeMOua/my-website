@@ -26,12 +26,22 @@ const router = createRouter({
     {
       path: '/contact',
       name: 'contact',
-      component: () => import('../views/ContactView.vue'),
+      redirect: '/about',
     },
     {
       path: '/games',
       name: 'games',
       component: () => import('../views/games/GamesView.vue'),
+    },
+    {
+      path: '/online-games',
+      name: 'online-games',
+      component: () => import('../views/games/GamesView.vue'),
+    },
+    {
+      path: '/ai',
+      name: 'ai',
+      component: () => import('../views/ai/AIView.vue'),
     },
     {
       path: '/games/2048',
