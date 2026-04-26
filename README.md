@@ -40,3 +40,16 @@ npm run dev
 ```sh
 npm run build
 ```
+
+## Online Gomoku (WebSocket)
+
+Start websocket server:
+
+```sh
+pnpm run gomoku-server
+```
+
+Optional environment variables:
+
+- `GOMOKU_WS_PORT` (server port, default: `8787`)
+- `VITE_GOMOKU_WS_URL` (frontend websocket url, default: `ws://localhost:8787`)

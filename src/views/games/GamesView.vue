@@ -32,7 +32,7 @@ const categories = [
     name: '联机游戏',
     icon: '🤝',
     games: [
-      { name: '双人对战（规划中）', desc: '支持房间匹配和实时对战', tech: 'WebSocket' },
+      { name: '联机五子棋', route: '/games/gomoku-online', desc: '创建房间后邀请好友进行实时对战', tech: 'WebSocket' },
       { name: '排行榜联机赛（规划中）', desc: '按周赛积分，支持战绩回放', tech: 'Realtime DB' },
     ],
   },
