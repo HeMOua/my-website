@@ -27,6 +27,7 @@ interface Envelope {
 
 const BOARD_SIZE = 15
 const HEARTBEAT_MS = 15000
+const CONNECTION_TIMEOUT_MS = 5000
 const RECONNECT_STORAGE_KEY = 'gomoku-online-reconnect'
 const ROOM_STORAGE_KEY = 'gomoku-online-room-id'
 
@@ -44,12 +45,14 @@ const connectionStatus = ref<ConnectionStatus>('disconnected')
 const systemMessage = ref('')
 
 const ws = ref<WebSocket | null>(null)
-let heartbeatTimer: number | null = null
+let heartbeatTimer: ReturnType<typeof window.setInterval> | null = null
+let connectionAttemptId = 0
 
 const wsUrl = computed(() => {
   const configured = import.meta.env.VITE_GOMOKU_WS_URL
-  if (configured && configured.trim().length > 0) {
-    return configured
+  const normalized = configured?.trim()
+  if (normalized) {
+    return normalized
   }
   return 'ws://localhost:8787'
 })
@@ -85,6 +88,12 @@ const gameStatusText = computed(() => {
   if (gameStatus.value === 'waiting') return '等待双方就绪'
   if (gameStatus.value === 'playing') return `对局进行中，当前：${turnLabel.value}`
   return winnerLabel.value || '对局结束'
+})
+
+const connectionStatusText = computed(() => {
+  if (connectionStatus.value === 'connected') return '已连接'
+  if (connectionStatus.value === 'connecting') return '连接中'
+  return '已断开'
 })
 
 onMounted(() => {
@@ -153,8 +162,23 @@ async function reconnectRoom() {
 }
 
 function handlePlaceStone(x: number, y: number) {
-  if (!canPlaceStone.value) {
-    systemMessage.value = '当前不可落子（可能未轮到你或对手不在线）'
+  if (connectionStatus.value !== 'connected') {
+    systemMessage.value = '尚未连接联机服务'
+    return
+  }
+
+  if (gameStatus.value !== 'playing') {
+    systemMessage.value = '当前对局未开始或已结束'
+    return
+  }
+
+  if (!playersOnline.value.B || !playersOnline.value.W) {
+    systemMessage.value = '有玩家离线，暂时无法落子'
+    return
+  }
+
+  if (playerSeat.value === null || playerSeat.value !== turn.value) {
+    systemMessage.value = '当前不是你的回合'
     return
   }
 
@@ -214,12 +238,26 @@ async function ensureConnected() {
 
   connectionStatus.value = 'connecting'
   closeSocket()
+  const attemptId = ++connectionAttemptId
 
   const nextSocket = new WebSocket(wsUrl.value)
   ws.value = nextSocket
 
   return new Promise<boolean>(resolve => {
+    const connectionTimeout = window.setTimeout(() => {
+      if (attemptId === connectionAttemptId && connectionStatus.value !== 'connected') {
+        connectionStatus.value = 'disconnected'
+        closeSocket()
+        resolve(false)
+      }
+    }, CONNECTION_TIMEOUT_MS)
+
     nextSocket.onopen = () => {
+      if (attemptId !== connectionAttemptId) {
+        nextSocket.close()
+        return
+      }
+      window.clearTimeout(connectionTimeout)
       connectionStatus.value = 'connected'
       systemMessage.value = '已连接联机服务'
       startHeartbeat()
@@ -231,23 +269,23 @@ async function ensureConnected() {
     }
 
     nextSocket.onerror = () => {
+      if (attemptId !== connectionAttemptId) {
+        return
+      }
+      window.clearTimeout(connectionTimeout)
       systemMessage.value = '连接联机服务失败'
     }
 
     nextSocket.onclose = () => {
+      if (attemptId !== connectionAttemptId) {
+        return
+      }
+      window.clearTimeout(connectionTimeout)
       connectionStatus.value = 'disconnected'
       stopHeartbeat()
       systemMessage.value = '连接已断开，可使用重连按钮恢复对局'
-      if (ws.value === nextSocket) {
-        ws.value = null
-      }
+      ws.value = null
     }
-
-    window.setTimeout(() => {
-      if (connectionStatus.value !== 'connected') {
-        resolve(false)
-      }
-    }, 5000)
   })
 }
 
@@ -392,7 +430,7 @@ function cloneBoard(source: Stone[][]) {
     <section class="panel connection-panel">
       <div class="field-group">
         <label for="room-id">房间号</label>
-        <input id="room-id" v-model="roomIdInput" maxlength="12" placeholder="例如：AB12CD" />
+        <input id="room-id" v-model="roomIdInput" maxlength="12" placeholder="例如：AB12CD" aria-label="房间号" />
       </div>
 
       <div class="actions">
@@ -405,7 +443,7 @@ function cloneBoard(source: Stone[][]) {
       <div class="status-grid">
         <div class="status-item">
           <span>连接状态</span>
-          <strong>{{ connectionStatus }}</strong>
+          <strong>{{ connectionStatusText }}</strong>
         </div>
         <div class="status-item">
           <span>当前房间</span>
@@ -464,6 +502,9 @@ function cloneBoard(source: Stone[][]) {
 
 <style scoped>
 .gomoku-page {
+  --gomoku-btn-bg: rgba(83, 243, 255, 0.08);
+  --gomoku-btn-primary-bg: rgba(83, 243, 255, 0.2);
+  --gomoku-btn-primary-text: #04121f;
   width: min(1100px, calc(100vw - 24px));
   margin: 18px auto 36px;
   display: grid;
@@ -531,7 +572,7 @@ function cloneBoard(source: Stone[][]) {
 
 .btn {
   border: 1px solid rgba(91, 228, 255, 0.22);
-  background: rgba(83, 243, 255, 0.08);
+  background: var(--gomoku-btn-bg);
   color: var(--text);
   border-radius: 10px;
   padding: 8px 12px;
@@ -544,8 +585,8 @@ function cloneBoard(source: Stone[][]) {
 }
 
 .btn.primary {
-  background: rgba(83, 243, 255, 0.2);
-  color: #04121f;
+  background: var(--gomoku-btn-primary-bg);
+  color: var(--gomoku-btn-primary-text);
   font-weight: 700;
 }
 

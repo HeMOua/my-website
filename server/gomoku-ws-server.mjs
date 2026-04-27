@@ -5,7 +5,10 @@ import { WebSocket, WebSocketServer } from 'ws'
 const BOARD_SIZE = 15
 const PORT = Number(process.env.GOMOKU_WS_PORT || 8787)
 const ROOM_ID_LENGTH = 6
+const ROOM_ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+const ROOM_ID_MAX_RETRIES = 1000
 const RECONNECT_GRACE_MS = 5 * 60 * 1000
+const CLEANUP_INTERVAL_MS = 30 * 1000
 
 /** @typedef {'B' | 'W'} Seat */
 
@@ -42,10 +45,11 @@ setInterval(() => {
   for (const [roomId, room] of rooms) {
     const bothOffline = !room.players.B.connected && !room.players.W.connected
     if (bothOffline && now - room.lastActivity > RECONNECT_GRACE_MS) {
+      console.log(`[gomoku-ws] cleanup room ${roomId}`)
       rooms.delete(roomId)
     }
   }
-}, 30 * 1000)
+}, CLEANUP_INTERVAL_MS)
 
 httpServer.listen(PORT, () => {
   console.log(`Gomoku websocket server listening on ws://localhost:${PORT}`)
@@ -100,7 +104,13 @@ function createRoom(socket) {
 
   leaveRoom(socket)
 
-  const roomId = generateRoomId()
+  let roomId = ''
+  try {
+    roomId = generateRoomId()
+  } catch {
+    send(socket, { type: 'error', message: '房间创建失败，请稍后重试' })
+    return
+  }
   const reconnectToken = randomUUID()
   /** @type {RoomState} */
   const room = {
@@ -196,7 +206,7 @@ function joinRoom(socket, message) {
   })
 
   room.lastActivity = Date.now()
-  room.status = room.players.B.connected && room.players.W.connected && !room.winner ? 'playing' : room.status
+  updateRoomStatus(room)
 
   send(socket, {
     type: 'room_joined',
@@ -320,7 +330,7 @@ function requestRematch(socket) {
     room.board = createBoard()
     room.turn = 'B'
     room.winner = null
-    room.status = room.players.B.connected && room.players.W.connected ? 'playing' : 'waiting'
+    updateRoomStatus(room)
     room.rematchVotes.clear()
 
     broadcast(room, { type: 'game_reset' })
@@ -413,7 +423,7 @@ function leaveRoom(socket) {
     player.connected = false
   }
 
-  room.status = room.players.B.connected && room.players.W.connected && !room.winner ? 'playing' : 'waiting'
+  updateRoomStatus(room)
   room.lastActivity = Date.now()
 
   const otherSeat = context.seat === 'B' ? 'W' : 'B'
@@ -534,7 +544,7 @@ function countDirection(board, x, y, dx, dy, stone) {
   let nx = x + dx
   let ny = y + dy
 
-  while (ny >= 0 && ny < BOARD_SIZE && nx >= 0 && nx < BOARD_SIZE && board[ny][nx] === stone) {
+  while (isInBounds(nx, ny) && board[ny][nx] === stone) {
     count += 1
     nx += dx
     ny += dy
@@ -552,13 +562,18 @@ function toSafeInt(value) {
 }
 
 function generateRoomId() {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   let roomId = ''
+  let retries = 0
 
   do {
-    roomId = ''
-    for (let i = 0; i < ROOM_ID_LENGTH; i++) {
-      roomId += alphabet[Math.floor(Math.random() * alphabet.length)]
+    roomId = Array.from(
+      { length: ROOM_ID_LENGTH },
+      () => ROOM_ID_ALPHABET[Math.floor(Math.random() * ROOM_ID_ALPHABET.length)],
+    ).join('')
+    retries += 1
+
+    if (retries > ROOM_ID_MAX_RETRIES) {
+      throw new Error('无法分配新的房间号，请稍后重试')
     }
   } while (rooms.has(roomId))
 
@@ -581,7 +596,28 @@ function parseJson(raw) {
  * @param {unknown} value
  */
 function isRecord(value) {
-  return typeof value === 'object' && value !== null
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * @param {number} x
+ * @param {number} y
+ */
+function isInBounds(x, y) {
+  return y >= 0 && y < BOARD_SIZE && x >= 0 && x < BOARD_SIZE
+}
+
+/**
+ * @param {RoomState} room
+ */
+function updateRoomStatus(room) {
+  const bothOnline = room.players.B.connected && room.players.W.connected
+  if (bothOnline && !room.winner) {
+    room.status = 'playing'
+    return
+  }
+
+  room.status = room.winner ? 'finished' : 'waiting'
 }
 
 /**
